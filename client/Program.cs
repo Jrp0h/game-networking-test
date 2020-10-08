@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Collections.Generic;
 
 namespace client
 {
@@ -10,50 +11,97 @@ namespace client
             Welcome = 1,
             AlreadyExistingPlayers,
             NewPlayer,
-            PlayerDisconnected
+            PlayerDisconnected,
+            NewMessage
         }
 
         static Client c;
 
         static void Main(string[] args)
         {
+            Console.Write("Enter a Username: ");
+            string name = Console.ReadLine();
+
+            Dictionary<int, Player> chatters = new Dictionary<int, Player>();
+
             c = new Client("localhost", 9000);
 
-            c.AddPacketHandler((int)RecivePackets.Welcome, (Packet _packet) => {
-                string msg = _packet.ReadString();
-                int id = _packet.ReadInt();
+            c.OnConnectionFailed += (ConnectionError error) => {
+                Console.WriteLine("Connection Failed");
+            };
 
+            c.OnDisconnect += () => {
+                Console.WriteLine("Disconnected");
+                Environment.Exit(0);    
+            };
+
+            c.AddPacketHandler((int)RecivePackets.Welcome, (Packet _packet) => {
+                int id = _packet.ReadInt();
                 c.id = id;
-                Console.WriteLine(msg);
-                Console.WriteLine("My new id is: " + id);
+
+                Packet p = new Packet((int)RecivePackets.Welcome);
+
+                p.Write(name);
+                c.Send(p);
             });
 
             c.AddPacketHandler((int)RecivePackets.NewPlayer, (Packet _packet) => {
-                int id = _packet.ReadInt();
 
-                Console.WriteLine("New player connected: " + id);
+                Player p = _packet.Read<Player>();
+
+                Console.WriteLine(p.name + " joined");
+                chatters.Add(p.id, p);
             });
 
             c.AddPacketHandler((int)RecivePackets.AlreadyExistingPlayers, (Packet _packet) => {
-                System.Console.WriteLine("Already Existing Players");
-                int userCount = _packet.ReadInt();
+                Player[] players = _packet.ReadArray<Player>();
 
-                for(int i = 0; i < userCount; i++)
+                if(players.Length <= 0)
                 {
-                    Console.WriteLine(_packet.ReadInt() + " : " + _packet.ReadString());
+                    System.Console.WriteLine("You are alone here");
+                    return;
+                }
+
+                System.Console.WriteLine("You are chatting with: ");
+                for(int i = 0; i < players.Length; i++)
+                {
+                    chatters.Add(players[i].id, players[i]);
+                    Console.WriteLine(players[i].name);
                 }
             });
 
             c.AddPacketHandler((int)RecivePackets.PlayerDisconnected, (Packet _packet) => {
                 
                 int id = _packet.ReadInt();
+                if(!chatters.ContainsKey(id))
+                    return;
 
-                System.Console.WriteLine($"User {id} disconnected");
+                System.Console.WriteLine($"{chatters[id].name} disconnected");
+                chatters.Remove(id);
+            });
+
+
+            c.AddPacketHandler((int)RecivePackets.NewMessage, (Packet _packet) => {
+                
+                int chatter = _packet.ReadInt();
+                
+                if(!chatters.ContainsKey(chatter))
+                    return;
+
+                System.Console.WriteLine($"{chatters[chatter].name}: " + _packet.ReadString());
             });
 
             c.Connect();
 
-            while(c.IsConnected) { Thread.Sleep(1); }
+            while(c.IsConnected) { 
+                Console.Write("You: ");
+                string newMessage = Console.ReadLine();
+                
+                Packet p = new Packet((int)RecivePackets.NewMessage);
+                p.Write(newMessage);
+
+                c.Send(p);
+            }
         }
     }
 }

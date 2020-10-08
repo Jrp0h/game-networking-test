@@ -6,6 +6,10 @@ using System.Collections.Generic;
 
 namespace client {
 
+    enum ConnectionError {
+        CONNECTION_REFUSED = 111
+    }
+
     class Client {
         
         public int id;
@@ -23,6 +27,10 @@ namespace client {
         public bool IsConnected { get { return isConnected; } }
         private bool isConnected;
 
+        public Action OnDisconnect;
+        public Action OnConnect;
+        public Action<ConnectionError> OnConnectionFailed;
+
         public Client(string _ip, int _port)
         {
             ip = _ip;
@@ -33,11 +41,25 @@ namespace client {
 
         public void Connect()
         {
-            tcp = new TCP(HandlePacket, Disconnect);
+            tcp = new TCP(HandlePacket, Disconnect, OnConnectInvoked, OnConnectionFailedInvoked);
 
             isConnected = true;
             tcp.Connect(ip, port);
 
+        }
+
+        private void OnConnectionFailedInvoked(ConnectionError error)
+        {
+            isConnected = false;
+
+            if(OnConnectionFailed != null)
+                OnConnectionFailed(error);
+        }
+
+        private void OnConnectInvoked()
+        {
+            if(OnConnect != null)
+                OnConnect();
         }
 
         public void AddPacketHandler(int _id, PacketHandler _handler)
@@ -59,12 +81,26 @@ namespace client {
             packetHandlers[_packetId](_packet);
         }
 
+        public void Send(Packet _packet)
+        {
+            if(!isConnected)
+            {
+                Console.WriteLine("Can't send Packets when you aren't connected!");
+                return;
+            }
+            _packet.WriteLength();
+            tcp.SendPacket(_packet);
+        }
+
         public void Disconnect()
         {
             if(isConnected)
             {
                 isConnected = false;
                 tcp.socket.Close();
+
+                if(OnDisconnect != null)
+                    OnDisconnect();
             }
         }
 
@@ -79,11 +115,15 @@ namespace client {
 
             private HandlePacket OnHandlePacket;
             private Action OnDisconnect;
+            private Action OnConnect;
+            private Action<ConnectionError> OnConnectionFailed;
                 
-            public TCP(HandlePacket _hp, Action _onDisconnect)
+            public TCP(HandlePacket _hp, Action _onDisconnect, Action _onConnect, Action<ConnectionError> _onConnectionFailed)
             {
                 OnHandlePacket = _hp;
                 OnDisconnect = _onDisconnect;
+                OnConnect = _onConnect;
+                OnConnectionFailed = _onConnectionFailed;
 
                 recivedData = new Packet();
             }
@@ -101,9 +141,24 @@ namespace client {
 
             private void ConnectCallback(IAsyncResult _result)
             {
-                socket.EndConnect(_result);
+                try
+                {
+                    socket.EndConnect(_result);
+                }
+                catch (SocketException e)
+                {
+                    System.Console.WriteLine(e.ErrorCode);
+
+                    if(OnConnectionFailed != null)
+                        OnConnectionFailed((ConnectionError)e.ErrorCode);
+
+                    return;
+                }
 
                 stream = socket.GetStream();
+
+                if(OnConnect == null)
+                    OnConnect();
 
                 stream.BeginRead(reciveBuffer, 0, dataBufferSize, ReciveCallback, null);
             }

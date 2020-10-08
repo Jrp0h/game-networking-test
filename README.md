@@ -2,6 +2,10 @@
 
 This is a test for creating a server-client api for turn-based games.
 
+## TODO
+
+Remove players if they haven't sent welcome after x seconds
+
 ## Dependencies
 
 ```bash

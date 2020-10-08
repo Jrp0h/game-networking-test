@@ -13,6 +13,8 @@ namespace server {
 
         public int Length { get { return buffer.Count; } }
         public int UnreadLength { get { return buffer.Count - currentReadPosition; } }
+
+        public int CurrentPosition { get { return currentReadPosition; } }
        
         public Packet()
         {
@@ -113,6 +115,19 @@ namespace server {
             buffer.AddRange(Encoding.UTF8.GetBytes(_data));
         }
 
+        public void Write<T>(IPacketable<T> _data) where T : IPacketable<T>, new()
+        {
+            buffer = PacketableHandler.Write(_data, this).buffer;
+        }
+
+        public void Write<T>(IPacketable<T>[] _data) where T : IPacketable<T>, new()
+        {
+            Write(_data.Length);
+
+            for(int i = 0; i < _data.Length; i++)
+                buffer = PacketableHandler.Write(_data[i], this).buffer;
+        }
+
 
         private byte[] Read(int _count, int _size, bool _shouldMove = true)
         {
@@ -189,6 +204,32 @@ namespace server {
             byte[] _value = Read(length, 1, _shouldMove);
 
             return Encoding.UTF8.GetString(_value, 0, length);
+        }
+
+        public T Read<T>() where T : IPacketable<T>, new()
+        {
+            ReadData<T> data = PacketableHandler.Read(new T(), this);
+            
+            currentReadPosition = data.bytesRead;
+
+            return data.data; 
+        }
+
+        public T[] ReadArray<T>() where T : IPacketable<T>, new()
+        {
+            int size = ReadInt();
+            
+            T[] arr = new T[size];
+
+            for (int i = 0; i < size; i++)
+            {
+                ReadData<T> data = PacketableHandler.Read(new T(), this);
+                currentReadPosition = data.bytesRead;
+
+                arr[i] = data.data;
+            }
+
+            return arr; 
         }
 
         public void Dispose()
