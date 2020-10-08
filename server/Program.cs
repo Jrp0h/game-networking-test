@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace server
 {
@@ -6,7 +7,10 @@ namespace server
     class Program
     {
         enum RecivePackets {
-            Welcome = 1
+            Welcome = 1,
+            AlreadyExistingPlayers,
+            NewPlayer,
+            PlayerDisconnected
         }
 
         static void Main(string[] args)
@@ -17,8 +21,48 @@ namespace server
                 Console.WriteLine(server.clients[_from].tcp.socket.Client.RemoteEndPoint + " has set a welcome");
             });
 
+            server.OnPlayerDisconnected += (int _id) => {
+                Packet p1 = new Packet((int)RecivePackets.PlayerDisconnected);
+                p1.Write(_id);
+
+                server.SendToAllExcept(_id, p1);
+            };
+
             server.OnUpdate += () => {
-                Console.WriteLine("Updating");
+                // Console.WriteLine("Updating");
+            };
+
+            server.OnPlayerConnected += (int _id) => {
+                
+                System.Console.WriteLine("User connected successfully");
+
+                Packet p1 = new Packet((int)RecivePackets.Welcome);
+                p1.Write("Hello, new player åäö yeay :)");
+                p1.Write(_id);
+
+                server.SendTo(_id, p1);
+
+                Packet p2 = new Packet((int)RecivePackets.NewPlayer);
+                p2.Write(_id);
+
+                server.SendToAllExcept(_id, p2);
+
+                Packet p3 = new Packet((int)RecivePackets.AlreadyExistingPlayers);
+
+                int count = server.ConnectedClients - 1;
+
+                p3.Write(count);
+
+                for(int i = 0; i < server.clients.Count; i++)
+                {
+                    if(server.clients[i].tcp.socket == null || server.clients[i].Id == _id)
+                        continue;
+
+                   p3.Write(server.clients[i].Id); 
+                   p3.Write("Hej" + server.clients[i].Id);
+                }
+
+                server.SendTo(_id, p3);
             };
 
             server.Start();

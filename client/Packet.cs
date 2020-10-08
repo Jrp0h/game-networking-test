@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace server {
+namespace client {
 
     class Packet : IDisposable {
 
@@ -115,11 +115,9 @@ namespace server {
 
         public void Write(string _data)
         {
-            // this.Write(_data.Length);
-            this.Write(Encoding.UTF8.GetByteCount(_data));
+            this.Write(_data.Length);
             this.buffer.AddRange(Encoding.UTF8.GetBytes(_data));
         }
-
 
         private byte[] Read(int _count, int _size, bool _shouldMove = true)
         {

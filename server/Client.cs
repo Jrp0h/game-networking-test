@@ -2,17 +2,29 @@ using System;
 using System.Net.Sockets;
 
 namespace server {
-    class Client {
 
+    class Client 
+    {
         public static int dataBufferSize = 4096;
 
-        int id;
+        public int id;
+        public int Id { get { return id; } }
         public TCP tcp;
+        private Server server;
 
         public Client(Server _server, int _id)
         {
             this.id = _id;
+            server = _server;
             this.tcp = new TCP(_server, _id);
+
+            this.tcp.OnDisconnect = Disconnect;
+        }
+
+        void Disconnect()
+        {
+            tcp.Disconnect();
+            server.PlayerDisconnected(id);
         }
         
         public class TCP {
@@ -24,7 +36,9 @@ namespace server {
             private NetworkStream stream;
 
             private Packet recivedData;
-            private byte[] reciveBuffer;
+            private byte[] recivedBuffer;
+
+            public Action OnDisconnect;
 
             public TCP(Server _server, int _id)
             {
@@ -34,6 +48,7 @@ namespace server {
 
             public void Connect(TcpClient _socket)
             {
+                System.Console.WriteLine("New user id: " + id);
                 this.socket = _socket;
 
                 this.socket.ReceiveBufferSize = dataBufferSize;
@@ -42,9 +57,18 @@ namespace server {
                 this.stream = _socket.GetStream();
 
                 this.recivedData = new Packet();
-                this.reciveBuffer = new byte[dataBufferSize];
+                this.recivedBuffer = new byte[dataBufferSize];
 
-                stream.BeginRead(this.reciveBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+                stream.BeginRead(this.recivedBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+            }
+
+            public void Disconnect()
+            {
+                socket.Close();
+                socket = null;
+                stream = null;
+                recivedData = null;
+                recivedBuffer = null;
             }
 
             private void ReciveCallback(IAsyncResult _result)
@@ -55,15 +79,17 @@ namespace server {
 
                     if(byteLength <= 0)
                     {
-                        // Disconnect
+                        if(OnDisconnect != null)
+                            OnDisconnect();
+
                         return;
                     }
 
                     byte[] data = new byte[byteLength];
-                    Array.Copy(this.reciveBuffer, data, byteLength);
+                    Array.Copy(this.recivedBuffer, data, byteLength);
 
                     recivedData.Reset(HandleData(data));
-                    stream.BeginRead(this.reciveBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+                    stream.BeginRead(this.recivedBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
                 }
                 catch (System.Exception e)
                 {

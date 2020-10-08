@@ -19,6 +19,8 @@ namespace server {
         public Dictionary<int, PacketHandler> packetHandlers;
 
         public Action OnUpdate;
+        public Action<int> OnPlayerConnected;
+        public Action<int> OnPlayerDisconnected;
 
         public int TickRate { get; set; }
         public int MillisecoundsBetweenTicks { get { return 1000/TickRate; } }
@@ -26,6 +28,23 @@ namespace server {
         private bool isRunning = false;
 
         private Thread mainThread;
+
+        public int ConnectedClients { 
+            get 
+            { 
+                int count = 0;
+
+                for(int i = 0; i < clients.Count; i++)
+                {
+                    if(clients[i].tcp.socket == null)
+                        continue;
+
+                    count++;
+                }
+                
+                return count;
+            }
+        }
 
         public Server(int _port, int _maxClients = 10, int _tickRate = 30)
         {
@@ -37,6 +56,12 @@ namespace server {
             this.packetHandlers = new Dictionary<int, PacketHandler>();
 
             this.TickRate = _tickRate;
+        }
+
+        public void PlayerDisconnected(int _id)
+        {
+            if(OnPlayerDisconnected != null)
+                OnPlayerDisconnected(_id);
         }
 
         public void Start()
@@ -83,8 +108,9 @@ namespace server {
             }
         }
 
+        
         private void AcceptTCPClientCallback(IAsyncResult _result) {
-            
+        
             TcpClient client = listener.EndAcceptTcpClient(_result);
 
             for(int i = 0; i < maxClients; i++)
@@ -92,6 +118,11 @@ namespace server {
                 if(this.clients[i].tcp.socket == null)
                 {
                     this.clients[i].tcp.Connect(client);
+                    if(OnPlayerConnected != null)
+                        OnPlayerConnected(this.clients[i].Id);
+                    
+                    listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
+                    
                     return;
                 }
             }
@@ -99,6 +130,7 @@ namespace server {
             // Create new client and send "Server full"
             // Disconnect client
 
+            listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
             Console.WriteLine("Server full");
         }
 
