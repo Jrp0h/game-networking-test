@@ -49,13 +49,16 @@ namespace server
 
                 Packet p3 = new Packet((int)RecivePackets.AlreadyExistingPlayers);
 
-                int count = server.ConnectedClients - 1;
+                List<Client> clients = server.ConnectedClients;
 
-                p3.Write(count);
+                if(clients.Count - 1 < 1)
+                    return;
+
+                p3.Write(clients.Count - 1);
 
                 for(int i = 0; i < server.clients.Count; i++)
                 {
-                    if(server.clients[i].tcp.socket == null || server.clients[i].Id == _id)
+                    if(server.clients[i].Id == _id)
                         continue;
 
                    p3.Write(server.clients[i].Id); 

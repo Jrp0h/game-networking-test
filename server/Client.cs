@@ -42,24 +42,24 @@ namespace server {
 
             public TCP(Server _server, int _id)
             {
-                this.id = _id;
-                this.server = _server;
+                id = _id;
+                server = _server;
             }
 
             public void Connect(TcpClient _socket)
             {
                 System.Console.WriteLine("New user id: " + id);
-                this.socket = _socket;
+                socket = _socket;
 
-                this.socket.ReceiveBufferSize = dataBufferSize;
-                this.socket.SendBufferSize = dataBufferSize;
+                socket.ReceiveBufferSize = dataBufferSize;
+                socket.SendBufferSize = dataBufferSize;
 
-                this.stream = _socket.GetStream();
+                stream = _socket.GetStream();
 
-                this.recivedData = new Packet();
-                this.recivedBuffer = new byte[dataBufferSize];
+                recivedData = new Packet();
+                recivedBuffer = new byte[dataBufferSize];
 
-                stream.BeginRead(this.recivedBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+                stream.BeginRead(recivedBuffer, 0, dataBufferSize,  ReciveCallback, null);
             }
 
             public void Disconnect()
@@ -86,10 +86,10 @@ namespace server {
                     }
 
                     byte[] data = new byte[byteLength];
-                    Array.Copy(this.recivedBuffer, data, byteLength);
+                    Array.Copy(recivedBuffer, data, byteLength);
 
                     recivedData.Reset(HandleData(data));
-                    stream.BeginRead(this.recivedBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+                    stream.BeginRead(recivedBuffer, 0, dataBufferSize, ReciveCallback, null);
                 }
                 catch (System.Exception e)
                 {
@@ -101,8 +101,8 @@ namespace server {
             {
                 try
                 {
-                    if(this.socket != null)
-                        this.stream.BeginWrite(_packet.ToArray(), 0, _packet.Length(), null, null);
+                    if(socket != null)
+                        stream.BeginWrite(_packet.ToArray(), 0, _packet.Length, null, null);
                 }
                 catch (System.Exception e)
                 {
@@ -113,19 +113,19 @@ namespace server {
             private bool HandleData(byte[] _data)
             {
                 int packetLength = 0;
-                this.recivedData.SetBytes(_data);
+                recivedData.SetBytes(_data);
 
-                if(this.recivedData.GetUnreadLength() >= 4)
+                if(recivedData.UnreadLength >= 4)
                 {
-                    packetLength = this.recivedData.ReadInt();
+                    packetLength = recivedData.ReadInt();
 
                     if(packetLength <= 0)
                         return true;
                 }
 
-                while(packetLength > 0 && packetLength <= this.recivedData.GetUnreadLength())
+                while(packetLength > 0 && packetLength <= recivedData.UnreadLength)
                 {
-                    byte[] packetsByte = this.recivedData.ReadBytes(packetLength);
+                    byte[] packetsByte = recivedData.ReadBytes(packetLength);
 
                     // Execute on main thread
 
@@ -133,14 +133,14 @@ namespace server {
                     {
                         int packetId = packet.ReadInt();
                         // Call server handler
-                        server.HandlePacket(packetId, this.id, packet);
+                        server.HandlePacket(packetId, id, packet);
                     }
 
                     packetLength = 0;
 
-                    if(this.recivedData.GetUnreadLength() >= 4)
+                    if(recivedData.UnreadLength >= 4)
                     {
-                        packetLength = this.recivedData.ReadInt();
+                        packetLength = recivedData.ReadInt();
 
                         if(packetLength <= 0)
                             return true;

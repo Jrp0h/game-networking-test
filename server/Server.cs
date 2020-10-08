@@ -29,33 +29,33 @@ namespace server {
 
         private Thread mainThread;
 
-        public int ConnectedClients { 
+        public List<Client> ConnectedClients { 
             get 
             { 
-                int count = 0;
+                List<Client> c = new List<Client>();
 
                 for(int i = 0; i < clients.Count; i++)
                 {
                     if(clients[i].tcp.socket == null)
                         continue;
 
-                    count++;
+                    c.Add(clients[i]);
                 }
                 
-                return count;
+                return c;
             }
         }
 
         public Server(int _port, int _maxClients = 10, int _tickRate = 30)
         {
-            this.port = _port;
-            this.maxClients = _maxClients;
+            port = _port;
+            maxClients = _maxClients;
 
             listener = new TcpListener(IPAddress.Any, port);
 
-            this.packetHandlers = new Dictionary<int, PacketHandler>();
+            packetHandlers = new Dictionary<int, PacketHandler>();
 
-            this.TickRate = _tickRate;
+            TickRate = _tickRate;
         }
 
         public void PlayerDisconnected(int _id)
@@ -66,10 +66,10 @@ namespace server {
 
         public void Start()
         {
-            if(this.isRunning)
+            if(isRunning)
                 return;
 
-            this.isRunning = true;
+            isRunning = true;
 
             if(listener != null)
                 listener.Start();
@@ -77,30 +77,30 @@ namespace server {
             listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
 
             for(int i = 0; i < maxClients; i++)
-                this.clients.Add(i, new Client(this, i));
+                clients.Add(i, new Client(this, i));
 
-           this.mainThread = new Thread(new ThreadStart(Run)); 
-           this.mainThread.Start();
+           mainThread = new Thread(new ThreadStart(Run)); 
+           mainThread.Start();
         }
 
         public void Shutdown()
         {
-            this.isRunning = false;
-            this.mainThread.Abort();
+            isRunning = false;
+            mainThread.Abort();
         }
 
         private void Run()
         {
             DateTime nextLoop = DateTime.Now;
 
-            while(this.isRunning)
+            while(isRunning)
             {
                 while(nextLoop < DateTime.Now)
                 {
-                    if(this.OnUpdate != null)
-                        this.OnUpdate();
+                    if(OnUpdate != null)
+                        OnUpdate();
 
-                    nextLoop = nextLoop.AddMilliseconds(this.MillisecoundsBetweenTicks);
+                    nextLoop = nextLoop.AddMilliseconds(MillisecoundsBetweenTicks);
 
                     if(nextLoop > DateTime.Now)
                         Thread.Sleep(nextLoop - DateTime.Now);
@@ -115,11 +115,11 @@ namespace server {
 
             for(int i = 0; i < maxClients; i++)
             {
-                if(this.clients[i].tcp.socket == null)
+                if(clients[i].tcp.socket == null)
                 {
-                    this.clients[i].tcp.Connect(client);
+                    clients[i].tcp.Connect(client);
                     if(OnPlayerConnected != null)
-                        OnPlayerConnected(this.clients[i].Id);
+                        OnPlayerConnected(clients[i].Id);
                     
                     listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
                     
@@ -136,7 +136,7 @@ namespace server {
 
         public void AddPacketHandler(int _id, PacketHandler _handler)
         {
-            if(this.packetHandlers.ContainsKey(_id))
+            if(packetHandlers.ContainsKey(_id))
                 throw new Exception($"Packet Handler with id {_id} already exists");
 
             packetHandlers.Add(_id, _handler);
@@ -146,7 +146,7 @@ namespace server {
         {
            _packet.WriteLength();
 
-           this.clients[_clientId].tcp.SendPacket(_packet);
+           clients[_clientId].tcp.SendPacket(_packet);
         }
 
         public void SendToAll(Packet _packet)
@@ -154,7 +154,7 @@ namespace server {
            _packet.WriteLength();
 
            for(int i = 0; i < maxClients; i++)
-                this.clients[i].tcp.SendPacket(_packet);
+                clients[i].tcp.SendPacket(_packet);
         }
 
         public void SendToAllExcept(int _clientId, Packet _packet)
@@ -164,16 +164,16 @@ namespace server {
            for(int i = 0; i < maxClients; i++)
            {
                if(i != _clientId)
-                   this.clients[i].tcp.SendPacket(_packet);
+                   clients[i].tcp.SendPacket(_packet);
            }
         }
 
         public void HandlePacket(int _packetId, int _fromId, Packet _packet)
         {
-            if(!this.packetHandlers.ContainsKey(_packetId))
+            if(!packetHandlers.ContainsKey(_packetId))
                 throw new Exception("No Packet Handler for packetId " + _packetId);
 
-            this.packetHandlers[_packetId](_fromId, _packet);
+            packetHandlers[_packetId](_fromId, _packet);
         }
     }
 }

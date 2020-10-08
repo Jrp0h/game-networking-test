@@ -25,8 +25,8 @@ namespace client {
 
         public Client(string _ip, int _port)
         {
-            this.ip = _ip;
-            this.port = _port;
+            ip = _ip;
+            port = _port;
 
             packetHandlers = new Dictionary<int, PacketHandler>();
         }
@@ -42,7 +42,7 @@ namespace client {
 
         public void AddPacketHandler(int _id, PacketHandler _handler)
         {
-            if(this.packetHandlers.ContainsKey(_id))
+            if(packetHandlers.ContainsKey(_id))
                 throw new Exception($"Packet Handler with id {_id} already exists");
 
             packetHandlers.Add(_id, _handler);
@@ -50,13 +50,13 @@ namespace client {
 
         public void HandlePacket(int _packetId, Packet _packet)
         {
-            if(this.packetHandlers == null)
+            if(packetHandlers == null)
                 throw new Exception("No registed packet handlers");
 
-            if(!this.packetHandlers.ContainsKey(_packetId))
+            if(!packetHandlers.ContainsKey(_packetId))
                 throw new Exception("No Packet Handler for packetId " + _packetId);
 
-            this.packetHandlers[_packetId](_packet);
+            packetHandlers[_packetId](_packet);
         }
 
         public void Disconnect()
@@ -82,30 +82,30 @@ namespace client {
                 
             public TCP(HandlePacket _hp, Action _onDisconnect)
             {
-                this.OnHandlePacket = _hp;
-                this.OnDisconnect = _onDisconnect;
+                OnHandlePacket = _hp;
+                OnDisconnect = _onDisconnect;
 
                 recivedData = new Packet();
             }
 
             public void Connect(string _ip, int _port)
             {
-                this.socket = new TcpClient {
+                socket = new TcpClient {
                     ReceiveBufferSize = dataBufferSize,
                     SendBufferSize = dataBufferSize
                 };
 
-                this.reciveBuffer = new byte[dataBufferSize];
-                this.socket.BeginConnect(_ip, _port, ConnectCallback, null);
+                reciveBuffer = new byte[dataBufferSize];
+                socket.BeginConnect(_ip, _port, ConnectCallback, null);
             }
 
             private void ConnectCallback(IAsyncResult _result)
             {
-                this.socket.EndConnect(_result);
+                socket.EndConnect(_result);
 
-                this.stream = this.socket.GetStream();
+                stream = socket.GetStream();
 
-                this.stream.BeginRead(reciveBuffer, 0, dataBufferSize, ReciveCallback, null);
+                stream.BeginRead(reciveBuffer, 0, dataBufferSize, ReciveCallback, null);
             }
 
             private void ReciveCallback(IAsyncResult _result)
@@ -121,10 +121,10 @@ namespace client {
                     }
 
                     byte[] data = new byte[byteLength];
-                    Array.Copy(this.reciveBuffer, data, byteLength);
+                    Array.Copy(reciveBuffer, data, byteLength);
 
                     recivedData.Reset(HandleData(data));
-                    stream.BeginRead(this.reciveBuffer, 0, dataBufferSize,  this.ReciveCallback, null);
+                    stream.BeginRead(reciveBuffer, 0, dataBufferSize,  ReciveCallback, null);
                 }
                 catch (System.Exception ex)
                 {
@@ -137,8 +137,8 @@ namespace client {
             {
                 try
                 {
-                    if(this.socket != null)
-                        this.stream.BeginWrite(_packet.ToArray(), 0, _packet.Length(), null, null);
+                    if(socket != null)
+                        stream.BeginWrite(_packet.ToArray(), 0, _packet.Length, null, null);
                 }
                 catch (System.Exception e)
                 {
@@ -149,19 +149,19 @@ namespace client {
             private bool HandleData(byte[] _data)
             {
                 int packetLength = 0;
-                this.recivedData.SetBytes(_data);
+                recivedData.SetBytes(_data);
 
-                if(this.recivedData.GetUnreadLength() >= 4)
+                if(recivedData.UnreadLength >= 4)
                 {
-                    packetLength = this.recivedData.ReadInt();
+                    packetLength = recivedData.ReadInt();
 
                     if(packetLength <= 0)
                         return true;
                 }
 
-                while(packetLength > 0 && packetLength <= this.recivedData.GetUnreadLength())
+                while(packetLength > 0 && packetLength <= recivedData.UnreadLength)
                 {
-                    byte[] packetsByte = this.recivedData.ReadBytes(packetLength);
+                    byte[] packetsByte = recivedData.ReadBytes(packetLength);
 
                     // Execute on main thread
 
@@ -174,9 +174,9 @@ namespace client {
 
                     packetLength = 0;
 
-                    if(this.recivedData.GetUnreadLength() >= 4)
+                    if(recivedData.UnreadLength >= 4)
                     {
-                        packetLength = this.recivedData.ReadInt();
+                        packetLength = recivedData.ReadInt();
 
                         if(packetLength <= 0)
                             return true;
@@ -191,7 +191,7 @@ namespace client {
 
             void Disconnect()
             {
-                this.OnDisconnect();
+                OnDisconnect();
 
                 stream = null;
                 recivedData = null;
