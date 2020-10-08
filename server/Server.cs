@@ -11,7 +11,10 @@ namespace server {
         private int port;
         private int maxClients;
 
-        private TcpListener listener = null; 
+        private bool useUDP;
+
+        private TcpListener tcpListener = null; 
+        private UdpClient udpListener = null; 
 
         public Dictionary<int, Client> clients = new Dictionary<int, Client>();
 
@@ -19,8 +22,9 @@ namespace server {
         public Dictionary<int, PacketHandler> packetHandlers;
 
         public Action OnUpdate;
-        public Action<int> OnPlayerConnected;
-        public Action<int> OnPlayerDisconnected;
+        public Action<int> OnClientConnected;
+        public Action<int> OnClientDisconnected;
+        public Action<int> OnUDPClientConnected;
 
         public int TickRate { get; set; }
         public int MillisecoundsBetweenTicks { get { return 1000/TickRate; } }
@@ -46,22 +50,29 @@ namespace server {
             }
         }
 
-        public Server(int _port, int _maxClients = 10, int _tickRate = 30)
+        public Server(int _port, int _maxClients = 10, int _tickRate = 30, bool _useUDP = false)
         {
             port = _port;
             maxClients = _maxClients;
 
-            listener = new TcpListener(IPAddress.Any, port);
+            useUDP = _useUDP;
+
+            tcpListener = new TcpListener(IPAddress.Any, port);
+
+            if(_useUDP)
+            {
+                udpListener = new UdpClient(port);
+            }
 
             packetHandlers = new Dictionary<int, PacketHandler>();
 
             TickRate = _tickRate;
         }
 
-        public void PlayerDisconnected(int _id)
+        public void ClientDisconnected(int _id)
         {
-            if(OnPlayerDisconnected != null)
-                OnPlayerDisconnected(_id);
+            if(OnClientDisconnected != null)
+                OnClientDisconnected(_id);
         }
 
         public void Start()
@@ -71,13 +82,16 @@ namespace server {
 
             isRunning = true;
 
-            if(listener != null)
-                listener.Start();
+            if(tcpListener != null)
+                tcpListener.Start();
 
-            listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
+            tcpListener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
 
             for(int i = 0; i < maxClients; i++)
                 clients.Add(i, new Client(this, i));
+
+            if(useUDP)
+                udpListener.BeginReceive(UDPReciveCallback, null);
 
            mainThread = new Thread(new ThreadStart(Run)); 
            mainThread.Start();
@@ -108,20 +122,66 @@ namespace server {
             }
         }
 
+        private void UDPReciveCallback(IAsyncResult _result)
+        {
+            try
+            {
+                IPEndPoint clientEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                byte[] data = udpListener.EndReceive(_result, ref clientEndPoint);
+                udpListener.BeginReceive(UDPReciveCallback, null);
+
+                if(data.Length < 4)
+                    return;
+
+                using(Packet packet = new Packet(data))
+                {
+                    int clientId = packet.ReadInt();
+
+                    if(!clients.ContainsKey(clientId))
+                        return;
+
+                    if(clients[clientId].udp.endPoint == null)
+                    {
+                        clients[clientId].udp.Connect(clientEndPoint);
+
+                        if(OnUDPClientConnected != null)
+                            OnUDPClientConnected(clientId);
+                        return;
+                    }
+
+                    if(clients[clientId].udp.endPoint.ToString() == clientEndPoint.ToString())
+                        clients[clientId].udp.HandlePacket(packet);
+                }
+            }
+            catch (Exception e)
+            {
+                throw new Exception("Failed to recive UDP data: " + e.Message);
+            }
+        }
         
         private void AcceptTCPClientCallback(IAsyncResult _result) {
         
-            TcpClient client = listener.EndAcceptTcpClient(_result);
+            TcpClient client = tcpListener.EndAcceptTcpClient(_result);
 
             for(int i = 0; i < maxClients; i++)
             {
                 if(clients[i].tcp.socket == null)
                 {
                     clients[i].tcp.Connect(client);
-                    if(OnPlayerConnected != null)
-                        OnPlayerConnected(clients[i].Id);
+
+                    // if(useUDP)
+                    // {
+                        // clients[i].udp.Connect(((IPEndPoint)clients[i].tcp.socket.Client.LocalEndPoint).Port);
+                    // }
+
+                    Packet p = new Packet(0);
+                    p.Write(i);
+                    SendTo(i, p);
+
+                    if(OnClientConnected != null)
+                        OnClientConnected(clients[i].Id);
                     
-                    listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
+                    tcpListener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
                     
                     return;
                 }
@@ -130,7 +190,7 @@ namespace server {
             // Create new client and send "Server full"
             // Disconnect client
 
-            listener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
+            tcpListener.BeginAcceptTcpClient(AcceptTCPClientCallback, null);
             Console.WriteLine("Server full");
         }
 
@@ -142,30 +202,60 @@ namespace server {
             packetHandlers.Add(_id, _handler);
         }
         
-        public void SendTo(int _clientId, Packet _packet)
+        public void SendTo(int _clientId, Packet _packet, bool _overUDP = false)
         {
            _packet.WriteLength();
 
-           clients[_clientId].tcp.SendPacket(_packet);
+           if(_overUDP)
+               clients[_clientId].udp.SendPacket(_packet);
+           else 
+               clients[_clientId].tcp.SendPacket(_packet);
         }
 
-        public void SendToAll(Packet _packet)
+        public void SendToAll(Packet _packet, bool _overUDP = false)
         {
            _packet.WriteLength();
 
            for(int i = 0; i < maxClients; i++)
-                clients[i].tcp.SendPacket(_packet);
+           {
+               if(_overUDP)
+                   clients[i].udp.SendPacket(_packet);
+               else 
+                   clients[i].tcp.SendPacket(_packet);
+           }
         }
 
-        public void SendToAllExcept(int _clientId, Packet _packet)
+        public void SendToAllExcept(int _clientId, Packet _packet, bool _overUDP = false)
         {
            _packet.WriteLength();
 
            for(int i = 0; i < maxClients; i++)
            {
                if(i != _clientId)
-                   clients[i].tcp.SendPacket(_packet);
+               {
+                   if(_overUDP)
+                       clients[i].udp.SendPacket(_packet);
+                   else 
+                       clients[i].tcp.SendPacket(_packet);
+               }
            }
+        }
+
+        public void SendUDPPacket(IPEndPoint _clientEndPoint, Packet _packet)
+        {
+            if(!useUDP)
+                throw new Exception("Cannot send UDP Packets if you dont have it enabled");
+            try
+            {
+                if(_clientEndPoint != null)
+                {
+                    udpListener.BeginSend(_packet.ToArray(), _packet.Length, _clientEndPoint, null, null);
+                }
+            }
+            catch (Exception e)
+            {
+                throw new Exception("Failed to send over UDP: " + e.Message);
+            }
         }
 
         public void HandlePacket(int _packetId, int _fromId, Packet _packet)

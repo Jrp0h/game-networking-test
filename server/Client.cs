@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Net.Sockets;
 
 namespace server {
@@ -9,22 +10,27 @@ namespace server {
 
         public int id;
         public int Id { get { return id; } }
+
         public TCP tcp;
+        public UDP udp;
+
         private Server server;
 
         public Client(Server _server, int _id)
         {
-            this.id = _id;
+            id = _id;
             server = _server;
-            this.tcp = new TCP(_server, _id);
+            tcp = new TCP(_server, _id);
+            udp = new UDP(_server, _id);
 
-            this.tcp.OnDisconnect = Disconnect;
+            tcp.OnDisconnect = Disconnect;
         }
 
         void Disconnect()
         {
             tcp.Disconnect();
-            server.PlayerDisconnected(id);
+            udp.Disconnect();
+            server.ClientDisconnected(id);
         }
         
         public class TCP {
@@ -48,7 +54,7 @@ namespace server {
 
             public void Connect(TcpClient _socket)
             {
-                System.Console.WriteLine("New user id: " + id);
+                Console.WriteLine("New user id: " + id);
                 socket = _socket;
 
                 socket.ReceiveBufferSize = dataBufferSize;
@@ -91,7 +97,7 @@ namespace server {
                     recivedData.Reset(HandleData(data));
                     stream.BeginRead(recivedBuffer, 0, dataBufferSize, ReciveCallback, null);
                 }
-                catch (System.Exception e)
+                catch (Exception e)
                 {
                     throw new Exception($"Failed to Recive data! Ex: {e.Message}");
                 }
@@ -104,7 +110,7 @@ namespace server {
                     if(socket != null)
                         stream.BeginWrite(_packet.ToArray(), 0, _packet.Length, null, null);
                 }
-                catch (System.Exception e)
+                catch (Exception e)
                 {
                     throw new Exception($"Failed to send packet to user {id}! Ex: {e.Message}");
                 }
@@ -153,6 +159,47 @@ namespace server {
                 return false;
             }
 
+        }
+
+        public class UDP {
+            public IPEndPoint endPoint;
+
+            private Server server;
+
+            private int id;
+
+            public UDP(Server _server, int _id)
+            {
+                id = _id;
+                server = _server;
+            }
+
+            public void Connect(IPEndPoint _endPoint)
+            {
+                endPoint = _endPoint;
+            }
+
+            public void SendPacket(Packet _packet)
+            {
+                server.SendUDPPacket(endPoint, _packet);
+            }
+
+            public void Disconnect()
+            {
+                endPoint = null;
+            }
+
+            public void HandlePacket(Packet _packet)
+            {
+                int packetLength = _packet.ReadInt();
+                byte[] packetBytes = _packet.ReadBytes(packetLength);
+
+                using(Packet packet = new Packet(packetBytes))
+                {
+                    int packetId = packet.ReadInt();
+                    server.HandlePacket(packetId, id, packet);
+                }
+            }
         }
 
     }

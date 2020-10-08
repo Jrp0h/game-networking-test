@@ -68,6 +68,11 @@ namespace server {
             Write(_data);
         }
 
+        public void InsertInt(int _data)
+        {
+            buffer.InsertRange(0, BitConverter.GetBytes(_data));
+        }
+
         public void Write(byte _data)
         {
             buffer.Add(_data);
