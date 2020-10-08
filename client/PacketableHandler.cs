@@ -1,7 +1,5 @@
-using System;
-
-namespace client {
-
+namespace Andras.Net 
+{
     static class PacketableHandler
     {
 

@@ -2,8 +2,8 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 
-namespace server {
-
+namespace Andras.Net.Server 
+{
     class Client 
     {
         public static int dataBufferSize = 4096;

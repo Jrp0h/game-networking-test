@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace client {
-
+namespace Andras.Net 
+{
     class Packet : IDisposable {
 
         private List<byte> buffer;

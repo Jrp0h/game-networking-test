@@ -4,8 +4,8 @@ using System.Net.Sockets;
 
 using System.Collections.Generic;
 
-namespace client {
-
+namespace Andras.Net.Client 
+{
     enum ConnectionError {
         CONNECTION_REFUSED = 111
     }

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading;
-using System.Collections.Generic;
+
+using Andras.Net;
+using Andras.Net.Client;
 
 namespace client
 {

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace server {
+namespace Andras.Net {
 
     class Packet : IDisposable {
 

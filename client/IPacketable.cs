@@ -1,8 +1,5 @@
-using System;
-
-namespace client
+namespace Andras.Net
 {
-
     public struct ReadData<T> {
         public T data;
         public int bytesRead;
